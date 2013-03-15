@@ -23,7 +23,7 @@ transcoding process, event style WebSocket messages are sent to the client.
 
 ## What can you do with this code?
 This code runs under play 2.1 in a stand alone mode. It will copy the files to the server, but will
-fail to copy to Amazon S3 unless you set the Amazon credentials in conf/AwsCredentials.properties.
+fail to copy to Amazon S3 unless you set valid Amazon credentials in conf/AwsCredentials.properties.
 
 As a prototype, there are hard coded resources defined in the code, for example the Amazon
 bucket and queue names to name just a few. Also, the H2 database restarts each time you run the play
