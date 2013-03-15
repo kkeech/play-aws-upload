@@ -10,15 +10,16 @@ a multi-file upload with
 cloud storage, simple transcoding, background processing, and WebSocket status updates. The client/server
 connection is under load only during the that portion of the process where the file is transfered
 from the client to the server. Instead of polling the server for status updates of the S3 copy and
-transcoding progress, event style WebSocket messages are sent to the client.
+transcoding process, event style WebSocket messages are sent to the client.
 * multi-file upload, HTML5/JavaScript front end
 * client side event driven status updates using WebSocket
 * written in Scala 2.10
 * web framework play 2.1
-* H2 database
-* Amazon services java API
+* slick 1.0.0 as database access layer
+* H2 in memory database for simple prototyping
+* Amazon services java API 1.3.30
 * Amazon services: S3, ElasticTranscoder, SNS, SQS
-* Akka actors to carry out background processes
+* Akka actors to carry out background processing of Amazon uploads, etc.
 
 ## What can you do with this code?
 This code runs under play 2.1 in a stand alone mode. It will copy the files to the server, but will
