@@ -1,0 +1,14 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Home page
+GET     /                           controllers.Application.index
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /assets/*file               controllers.Assets.at(path="/public", file)
+
+POST    /upload-to-server1          controllers.Application.uploadToServer1
+POST    /upload-to-server3          controllers.Application.uploadToServer3
+GET     /update/live                controllers.Application.liveUpdate(userId)
+GET     /update/status                controllers.Application.statusUpdate(userId)

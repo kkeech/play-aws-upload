@@ -1,0 +1,273 @@
+@(userId: String)(implicit request: RequestHeader)
+
+@scripts = {
+<style type='text/css'>
+div.upload-page div.file-drop {
+    border-radius: 0.4em;
+    background: #fbae8c;
+    text-align: center;
+    height: 10em;
+    margin: 1em 1em;
+    padding: 0.5em;
+}
+div.upload-page div.file-drop > div {
+    border-width: 2px;
+    border-style: dashed;
+    border-color: #eee;
+    border-radius: 0.3em;
+    margin: 0px;
+    width: inherit;
+    height: inherit;
+}
+div.upload-page div.file-drop p {margin: 0em; margin-top: 4.2em; color: #FFF; font-weight:bold;}
+
+div.upload-page div.upload-status table {font-size: 0.8em; width: 100%;}
+div.upload-page div.upload-status table tr:nth-child(odd) {background-color: #fdfeff;}
+div.upload-page div.upload-status table tr:nth-child(even) {background-color: #fdeee8;}
+div.upload-pageX div.upload-status table tbody {text-transform: capitalize;}
+div.upload-page div.upload-status table td, div.upload-page div.upload-status table th {padding: 0px; margin: 0; text-align: left;}
+div.upload-page div.upload-status table td {padding-left: 1em; padding-top: 1em; padding-bottom: 1em; border: 1px solid #E2E2E2;}
+div.upload-page div.upload-status table th {text-transform: uppercase; background: #F4F6F8; font-weight: normal; padding: 1em; border: 1px solid #E2E2E2;}
+
+</style>
+
+<script type='text/javascript'>
+
+function ignoreEvent (e) {
+    e.stopPropagation();
+    e.preventDefault();
+}
+
+function upload_setup (self) {
+    var $pg = $('#upload-page');
+
+    self.$container = $('div.upload-assets',$pg);
+    self.$all_file_drops = $("div[drop-box]", self.$container);
+    self.$file_drop1 = $("div[drop-box='1']", self.$container);
+
+    self.$status_container = $('div.upload-status',$pg);
+    self.$status_table = $('table',self.$status_container);
+    self.$status_table_tbody = $('tbody',self.$status_table);
+
+    self.$upload_progress = $('#upload-progress');
+    self.$progress_bar = $('div.progress-bar', self.$upload_progress);
+
+    // ignore the following drag events, otherwise the drop won't work
+    self.$all_file_drops.bind('dragenter dragover dragleave', ignoreEvent);
+
+    self.$file_drop1.bind('drop', function(e) {
+        console.log('drop1');
+        e.stopPropagation();
+        e.preventDefault();
+        function df (file,i) {
+            return {
+                'description' : file.name,
+                'xx_int': i,
+                'userid': "@userId",
+                'thefile' : file
+            }
+        }
+        self.process_files(e.originalEvent.dataTransfer.files,"@routes.Application.uploadToServer1()",df);
+    });
+
+    self.$upload_progress.dialog({
+        'autoOpen' : false,
+        'modal' : true,
+        'closeOnEscape' : true,
+        'title' : 'Upload Progress',
+        'width' : 500,
+        'height' : 300,
+    });
+
+    self.$progress_bar.progressbar();
+
+    self.process_files = function(files,url,datafunc) {
+        var all_defer = $.Deferred();
+        var n_files = files.length;
+        var progress = [];
+        var xx = [];
+
+        function proc_file(file, i) {
+            var idx = i;
+            this.x = upload_data(url, datafunc(file,i));
+            this.x.progress(function(p) {
+                progress[idx] = p;
+                var sum = 0;
+                var k;
+                for (k = 0; k < progress.length; k++)
+                    sum += progress[k];
+                var total_p = sum / files.length;
+                all_defer.notify(total_p, n_files);
+            });
+            this.x.fail(function() {
+                console.log("error");
+            });
+            this.x.always(function() {
+                n_files -= 1;
+                if (n_files <= 0) {
+                    all_defer.resolve();
+                }
+            });
+        }
+
+        var i;
+        for (i = 0; i < files.length; i++) {
+            var x = new proc_file(files[i], i);
+        }
+        console.log('open the progress dialog');
+        self.$upload_progress.dialog('open');
+
+        all_defer.promise().progress(function(p, n) {
+            self.$progress_bar.progressbar('value', p * 100);
+        });
+        all_defer.promise().always(function() {
+            console.log('upload complete');
+            self.$upload_progress.dialog('close');
+        });
+    }
+
+    function upload_data (url, data) {
+        var defer = $.Deferred();
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        // xhr.upload.onloadstart = function(e) {}
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var loaded = (e.loaded / e.total);
+                defer.notify(loaded);
+            }
+        }
+        xhr.onload = function(e) {
+            var response = jQuery.parseJSON(e.target.responseText);
+            defer.resolve(response);
+        }
+        xhr.onerror = function(e) {
+            defer.reject(e);
+        }
+        xhr.onabort = function(e) {
+            defer.reject(e);
+        }
+        defer.abort = function() {
+            xhr.abort();
+        }
+
+        var form = new FormData();
+        var key;
+        for (key in data) {
+            if (data.hasOwnProperty(key))
+                form.append(key, data[key]);
+        }
+
+        xhr.send(form);
+
+        return defer.promise();
+    }
+
+    var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
+
+    self.liveUpdate = function () {
+        self.webSocket = new WS("@routes.Application.liveUpdate(userId).webSocketURL()")
+
+        var myOnOpenHdlr = function (e) {
+            console.log("webSocket onopen");
+            console.log(e);
+        }
+
+        var myOnCloseHdlr = function (e) {
+            console.log("webSocket onclose");
+            console.log(e);
+        }
+
+        var myOnErrorHdlr = function (e) {
+            console.log("webSocket onerror");
+            console.log(e);
+        }
+
+        var myOnMessageHdlr = function (e) {
+            console.log("webSocket onmessage");
+            console.log(e);
+            var data = $.parseJSON(e.data);
+            console.log(data);
+        }
+
+        self.webSocket.onopen = myOnOpenHdlr;
+        self.webSocket.onclose = myOnCloseHdlr;
+        self.webSocket.onerror = myOnErrorHdlr;
+        self.webSocket.onmessage = myOnMessageHdlr;
+    }
+
+    self.statusUpdate = function () {
+        self.statusWebSocket = new WS("@routes.Application.statusUpdate(userId).webSocketURL()")
+        self.statusWebSocket.onopen = function (e) {console.log("statusWebSocket onopen"); console.log(e);}
+        self.statusWebSocket.onclose = function (e) {console.log("statusWebSocket onclose"); console.log(e);}
+        self.statusWebSocket.onerror = function (e) {console.log("statusWebSocket onerror"); console.log(e);}
+        self.statusWebSocket.onmessage = function (e) {console.log("statusWebSocket onmessage"); console.log(e);}
+
+        self.update_status_table = function (msg) {
+            var createDate = new Date(msg.createTS);
+            var updateDate = new Date(msg.updateTS);
+            var timeDur = (msg.updateTS-msg.createTS);
+            var str = [
+                '<tr statusId="',msg.id,'"">',
+                '<td>',msg.id,'</td>',
+                '<td>',msg.userId,'</td>',
+                '<td>',msg.filename,'</td>',
+                '<td>',msg.contentType,'</td>',
+                '<td>',createDate.toUTCString(),'</td>',
+                '<td>',updateDate.toUTCString(),'</td>',
+                '<td>',timeDur,'</td>',
+                '<td>',msg.status,'</td>',
+                '</tr>'
+            ];
+            var html = str.join("");
+
+            var r = self.$status_table_tbody.find("tr[statusId='"+msg.id+"']");
+            if (r.length > 0) {
+                r.replaceWith(html);
+            } else {
+                self.$status_table_tbody.append(html);
+            }
+        }
+
+        self.statusWebSocket.onmessage = function (e) {
+            console.log("statusWebSocket onmessage");
+            console.log(e);
+            var data = $.parseJSON(e.data);
+            self.update_status_table(data);
+        }
+    }
+
+    self.statusUpdate();
+}
+
+function blah () {
+
+}
+</script>
+}
+
+@content = {
+<div id='upload-page' class='upload-page'>
+    <div class='upload-assets'>
+        <div class='file-drop' drop-box="1"><div><p>Drop files here to upload</p><p>Copy entire file to server, then copy to S3</p></div></div>
+    </div>
+    <div class='upload-status'>
+        <div>
+            <table>
+            <thead><tr><th>Id</th><th>UserId</th><th>File Name</th><th>Content Type</th><th>Created</th><th>Last Update</th><th>Duration</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div id='upload-progress'>
+    <div class='progress-bar'></div>
+</div>
+<script type='text/javascript'>
+$(document).bind('drop dragenter dragover dragleave', ignoreEvent);
+var upload_assets = {};
+upload_setup(upload_assets);
+</script>
+}
+
+@main("AWS Upload Prototype",scripts)(content)
