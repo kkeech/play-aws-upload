@@ -19,7 +19,6 @@ import org.panda.models._
 import org.panda.models.Models.currentTimestamp
 
 import org.panda.{AwsUploadManager,AwsUploadStatusManager,BeginUpload}
-import org.panda.stuff.{MyMultiParser,LiveUpdate}
 
 object Application extends Controller {
     private var idSeq1 = 0
@@ -101,37 +100,6 @@ object Application extends Controller {
         }.getOrElse {
             BadRequest("File not attached.")
         }
-    }
-
-    def uploadToServer3 = Action(MyMultiParser.multipartFormDataX) { implicit request =>
-        val fs : Option[FileUpload] = fileUploadForm.bindFromRequest().fold(
-            errFrm => None,
-            spec => Some(spec)
-        )
-
-        request.body.file("thefile").map{ thefile =>
-            val filename = thefile.filename
-            val contenttype = thefile.contentType.get
-            fs.map{ x =>
-                val rtn = Json.obj(
-                    "okay" -> true,
-                    "desc" -> x.description,
-                    "xx_int" -> x.xx_int,
-                    "ctype" -> contenttype,
-                    "bucket" -> thefile.ref.bucket,
-                    "filename" -> thefile.ref.filename
-                )
-                Ok(rtn)
-            }.getOrElse {
-                BadRequest("Form binding error.")
-            }
-        }.getOrElse {
-            BadRequest("File not attached.")
-        }
-    }
-
-    def liveUpdate (userId: String) = WebSocket.async[JsValue] { request  =>
-        LiveUpdate.join(userId)
     }
 
     def statusUpdate (userId: String) = WebSocket.async[JsValue] { request =>

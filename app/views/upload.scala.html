@@ -165,37 +165,6 @@ function upload_setup (self) {
 
     var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
 
-    self.liveUpdate = function () {
-        self.webSocket = new WS("@routes.Application.liveUpdate(userId).webSocketURL()")
-
-        var myOnOpenHdlr = function (e) {
-            console.log("webSocket onopen");
-            console.log(e);
-        }
-
-        var myOnCloseHdlr = function (e) {
-            console.log("webSocket onclose");
-            console.log(e);
-        }
-
-        var myOnErrorHdlr = function (e) {
-            console.log("webSocket onerror");
-            console.log(e);
-        }
-
-        var myOnMessageHdlr = function (e) {
-            console.log("webSocket onmessage");
-            console.log(e);
-            var data = $.parseJSON(e.data);
-            console.log(data);
-        }
-
-        self.webSocket.onopen = myOnOpenHdlr;
-        self.webSocket.onclose = myOnCloseHdlr;
-        self.webSocket.onerror = myOnErrorHdlr;
-        self.webSocket.onmessage = myOnMessageHdlr;
-    }
-
     self.statusUpdate = function () {
         self.statusWebSocket = new WS("@routes.Application.statusUpdate(userId).webSocketURL()")
         self.statusWebSocket.onopen = function (e) {console.log("statusWebSocket onopen"); console.log(e);}
