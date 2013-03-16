@@ -38,7 +38,7 @@ function ignoreEvent (e) {
     e.preventDefault();
 }
 
-function upload_setup (self) {
+function page_init (self) {
     var $pg = $('#upload-page');
 
     self.$container = $('div.upload-assets',$pg);
@@ -62,12 +62,12 @@ function upload_setup (self) {
         function df (file,i) {
             return {
                 'description' : file.name,
-                'xx_int': i,
+                'file_n': i,
                 'userid': "@userId",
                 'thefile' : file
             }
         }
-        self.process_files(e.originalEvent.dataTransfer.files,"@routes.Application.uploadToServer1()",df);
+        self.process_files(e.originalEvent.dataTransfer.files,"@routes.Application.uploadToServer()",df);
     });
 
     self.$upload_progress.dialog({
@@ -166,7 +166,7 @@ function upload_setup (self) {
     var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
 
     self.statusUpdate = function () {
-        self.statusWebSocket = new WS("@routes.Application.statusUpdate(userId).webSocketURL()")
+        self.statusWebSocket = new WS("@routes.Application.registerForStatusUpdates(userId).webSocketURL()")
         self.statusWebSocket.onopen = function (e) {console.log("statusWebSocket onopen"); console.log(e);}
         self.statusWebSocket.onclose = function (e) {console.log("statusWebSocket onclose"); console.log(e);}
         self.statusWebSocket.onerror = function (e) {console.log("statusWebSocket onerror"); console.log(e);}
@@ -209,9 +209,6 @@ function upload_setup (self) {
     self.statusUpdate();
 }
 
-function blah () {
-
-}
 </script>
 }
 
@@ -233,9 +230,11 @@ function blah () {
     <div class='progress-bar'></div>
 </div>
 <script type='text/javascript'>
+
 $(document).bind('drop dragenter dragover dragleave', ignoreEvent);
 var upload_assets = {};
-upload_setup(upload_assets);
+page_init(upload_assets);
+
 </script>
 }
 

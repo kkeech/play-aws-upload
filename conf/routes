@@ -8,5 +8,8 @@ GET     /                           controllers.Application.index
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
 
-POST    /upload-to-server1          controllers.Application.uploadToServer1
-GET     /update/status                controllers.Application.statusUpdate(userId)
+# Upload a single file to the server
+POST    /upload-to-server          controllers.Application.uploadToServer
+
+# Register for status update WebSocket events
+GET     /status-updates/register   controllers.Application.registerForStatusUpdates(userId)

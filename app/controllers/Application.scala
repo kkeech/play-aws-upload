@@ -34,19 +34,19 @@ object Application extends Controller {
 
     case class FileUpload (
         description: String,
-        xx_int: Int,
+        file_n: Int,
         userid: String
     )
     val fileUploadForm = Form(
         mapping(
             "description" -> of[String],
-            "xx_int" -> of[Int],
+            "file_n" -> of[Int],
             "userid" -> of[String]
         )(FileUpload.apply)(FileUpload.unapply)
     )
 
-    def uploadToServer1 = Action(parse.multipartFormData) { implicit request =>
-        play.api.Logger.info("uploadToServer1")
+    def uploadToServer = Action(parse.multipartFormData) { implicit request =>
+        play.api.Logger.info("uploadToServer")
         val fs : Option[FileUpload] = fileUploadForm.bindFromRequest().fold(
             errFrm => None,
             spec => Some(spec)
@@ -89,7 +89,7 @@ object Application extends Controller {
                 val rtn = Json.obj(
                     "okay" -> true,
                     "desc" -> x.description,
-                    "xx_int" -> x.xx_int,
+                    "file_n" -> x.file_n,
                     "ctype" -> contenttype,
                     "userid" -> x.userid
                 )
@@ -102,7 +102,7 @@ object Application extends Controller {
         }
     }
 
-    def statusUpdate (userId: String) = WebSocket.async[JsValue] { request =>
+    def registerForStatusUpdates (userId: String) = WebSocket.async[JsValue] { request =>
         AwsUploadStatusManager.registerForStatusUpdates(userId)
     }
 
