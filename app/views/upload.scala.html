@@ -2,6 +2,7 @@
 
 @scripts = {
 <style type='text/css'>
+
 div.upload-page div.file-drop {
     border-radius: 0.4em;
     background: #fbae8c;
@@ -19,15 +20,38 @@ div.upload-page div.file-drop > div {
     width: inherit;
     height: inherit;
 }
-div.upload-page div.file-drop p {margin: 0em; margin-top: 4.2em; color: #FFF; font-weight:bold;}
-
-div.upload-page div.upload-status table {font-size: 0.8em; width: 100%;}
+div.upload-page div.file-drop p {
+    margin: 0em;
+    margin-top: 4.2em;
+    color: #FFF;
+    font-weight:bold;
+}
+div.upload-page div.upload-status table {
+    font-size: 0.8em;
+    width: 100%;
+}
 div.upload-page div.upload-status table tr:nth-child(odd) {background-color: #fdfeff;}
 div.upload-page div.upload-status table tr:nth-child(even) {background-color: #fdeee8;}
 div.upload-pageX div.upload-status table tbody {text-transform: capitalize;}
-div.upload-page div.upload-status table td, div.upload-page div.upload-status table th {padding: 0px; margin: 0; text-align: left;}
-div.upload-page div.upload-status table td {padding-left: 1em; padding-top: 1em; padding-bottom: 1em; border: 1px solid #E2E2E2;}
-div.upload-page div.upload-status table th {text-transform: uppercase; background: #F4F6F8; font-weight: normal; padding: 1em; border: 1px solid #E2E2E2;}
+div.upload-page div.upload-status table td,
+div.upload-page div.upload-status table th {
+    padding: 0px;
+    margin: 0;
+    text-align: left;
+}
+div.upload-page div.upload-status table td {
+    padding-left: 1em;
+     padding-top: 1em;
+     padding-bottom: 1em;
+     border: 1px solid #E2E2E2;
+}
+div.upload-page div.upload-status table th {
+    text-transform: uppercase;
+    background: #F4F6F8;
+    font-weight: normal;
+    padding: 1em;
+    border: 1px solid #E2E2E2;
+}
 
 </style>
 
@@ -39,11 +63,15 @@ function ignoreEvent (e) {
 }
 
 function page_init (self) {
+    /*
+     * Define some useful handles to various DOM objects
+     */
+
     var $pg = $('#upload-page');
 
     self.$container = $('div.upload-assets',$pg);
     self.$all_file_drops = $("div[drop-box]", self.$container);
-    self.$file_drop1 = $("div[drop-box='1']", self.$container);
+    self.$file_drop = $("div[drop-box='1']", self.$container);
 
     self.$status_container = $('div.upload-status',$pg);
     self.$status_table = $('table',self.$status_container);
@@ -52,11 +80,14 @@ function page_init (self) {
     self.$upload_progress = $('#upload-progress');
     self.$progress_bar = $('div.progress-bar', self.$upload_progress);
 
-    // ignore the following drag events, otherwise the drop won't work
+    /*
+     * Ignore the following drag events, otherwise the drop won't work
+     */
+
     self.$all_file_drops.bind('dragenter dragover dragleave', ignoreEvent);
 
-    self.$file_drop1.bind('drop', function(e) {
-        console.log('drop1');
+    self.$file_drop.bind('drop', function(e) {
+        console.log('drop event received');
         e.stopPropagation();
         e.preventDefault();
         function df (file,i) {
