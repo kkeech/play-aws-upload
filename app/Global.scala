@@ -12,8 +12,6 @@ object Global extends GlobalSettings {
     override def onStart (app: Application) {
         lazy val database = Database.forDataSource(DB.getDataSource())
 
-        play.api.Logger.info("onStart")
-
         database withSession {
             // Create the database tables
             FileUploadProgressT.ddl.create
