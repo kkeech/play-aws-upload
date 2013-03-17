@@ -1,5 +1,11 @@
 package org.panda
 
+/*
+ * Some Amazon services utility functions
+ */
+
+import java.io.File
+
 import collection.JavaConversions._
 
 import com.amazonaws.auth.ClasspathPropertiesFileCredentialsProvider
@@ -7,13 +13,10 @@ import com.amazonaws.AmazonClientException
 import com.amazonaws.AmazonServiceException
 
 import com.amazonaws.services.s3.{AmazonS3,AmazonS3Client}
-import com.amazonaws.services.s3.model.{Bucket,ObjectListing,ListObjectsRequest,PutObjectRequest,CannedAccessControlList}
-import com.amazonaws.services.s3.model.ObjectMetadata
+import com.amazonaws.services.s3.model.{Bucket,ObjectListing,ListObjectsRequest,PutObjectRequest,CannedAccessControlList,ObjectMetadata}
 
-import com.amazonaws.services.s3.transfer.TransferManager
-import com.amazonaws.services.s3.model.ProgressEvent
-import com.amazonaws.services.s3.model.ProgressListener
-import com.amazonaws.services.s3.transfer.Upload
+import com.amazonaws.services.s3.transfer.{TransferManager,Upload}
+import com.amazonaws.services.s3.model.{ProgressEvent,ProgressListener}
 
 import com.amazonaws.services.elastictranscoder.{AmazonElasticTranscoder,AmazonElasticTranscoderClient}
 import com.amazonaws.services.elastictranscoder.model.{JobInput,JobOutput,CreateJobOutput,CreateJobRequest,ReadJobRequest,Job}
@@ -21,55 +24,54 @@ import com.amazonaws.services.elastictranscoder.model.{JobInput,JobOutput,Create
 import com.amazonaws.services.sqs.AmazonSQSClient
 import com.amazonaws.services.sqs.model.{ReceiveMessageRequest,GetQueueUrlRequest}
 
-import java.io.File
 
 object Aws {
+    // Amazon S3 service handle
     private val s3: AmazonS3 = new AmazonS3Client(new ClasspathPropertiesFileCredentialsProvider())
+    
+    // Amazon Elastic Transcoder service handle
     private val eT : AmazonElasticTranscoder  = new AmazonElasticTranscoderClient(new ClasspathPropertiesFileCredentialsProvider())
 
-    def listBuckets () {
-        for (b <- s3.listBuckets()) {
-            println(b.getName())
-        }
-
-        val x = new ListObjectsRequest().withBucketName("lyynks-whitelabel.dug") //.withPrefix("My")
-        val z = s3.listObjects(x)
-        for (s <- z.getObjectSummaries()) {
-            println("%20s %d %s".format(s.getKey,s.getSize,s.getLastModified().toString))
-        }
-    }
-
+    // Copy the file in the forground. Returns when upload is complete.
     def copyFile (bucketName: String, key: String, f: File, contentType: String) {
+        // Construct the request
         val r = new PutObjectRequest(bucketName, key, f)
         r.setCannedAcl(CannedAccessControlList.PublicRead)
         val m = new ObjectMetadata()
         m.setContentType(contentType)
         r.setMetadata(m)
+        
         try {
             s3.createBucket(bucketName)
+            // Copy the file to S3
             val x = s3.putObject(r)
         } catch {
             case cExc: AmazonClientException => println(cExc.toString())
             case sExc: AmazonServiceException => println(sExc.toString())
         }
     }
-
+    
+    // Copy the file in the background. Returns immediately.
     def copyFileWithProgress (bucketName: String, key: String, f: File, contentType: String) {
+        // Construct the request
         val r = new PutObjectRequest(bucketName, key, f)
         r.setCannedAcl(CannedAccessControlList.PublicRead)
         val m = new ObjectMetadata()
         m.setContentType(contentType)
         r.setMetadata(m)
-
+        
         val tx = new TransferManager(new ClasspathPropertiesFileCredentialsProvider().getCredentials());
+        
+        // Begin the async upload of the file to S3
         val upload = tx.upload(r)
 
+        // Attach a progress handler to the async upload process
         val progressListener: ProgressListener = new ProgressListener() {
             def progressChanged(progressEvent: ProgressEvent) {
-                //val n = progressEvent.getBytesTransfered()
                 val x = upload.getProgress().getBytesTransfered()
                 println("number of bytes transfered %d".format(x))
                 progressEvent.getEventCode match {
+                    // TODO - do something useful with the upload complete event
                     case ProgressEvent.COMPLETED_EVENT_CODE => println("upload complete")
                     case ProgressEvent.FAILED_EVENT_CODE => println("upload failed")
                 }
@@ -78,6 +80,7 @@ object Aws {
         upload.addProgressListener(progressListener)
     }
 
+    // Submit a video transcoding task to the Elastic Transcoder
     def submitVideoTranscodeRequest (
         iKey: String,
         oKey: String,
@@ -101,23 +104,14 @@ object Aws {
         val jobRequest = new CreateJobRequest
         jobRequest.setInput(jobIn)
         jobRequest.setOutput(jobOut)
+        // TODO - the pipeline ID is hard coded.
         jobRequest.setPipelineId("1361383070787-0691e8")
 
         // This submits the job, but how do I track the progress?
         val job = eT.createJob(jobRequest).getJob()
         println(job)
 
-        //val jobRequest2 = new ReadJobRequest
-        //jobRequest2.setId(job1.getJob.getId)
-
-        //val jobRead1 = eT.readJob(jobRequest2)
         job
     }
-
-    // S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
-
-    // s3.deleteObject(bucketName, key);
-
-    // s3.deleteBucket(bucketName);
 
 }

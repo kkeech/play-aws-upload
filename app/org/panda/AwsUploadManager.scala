@@ -1,6 +1,7 @@
 package org.panda
 
-//import play.api._
+import java.io.File
+
 import play.api.libs.concurrent._
 import play.api.libs.concurrent.Execution.Implicits._
 import play.api.libs.iteratee._
@@ -15,8 +16,6 @@ import akka.routing.RoundRobinRouter
 import scala.concurrent.duration._
 import scala.concurrent.Future
 
-import java.io.File
-
 import scala.slick.driver.H2Driver.simple._
 import Database.threadLocalSession
 import play.api.db.DB
@@ -28,22 +27,7 @@ import com.amazonaws.auth.ClasspathPropertiesFileCredentialsProvider
 import com.amazonaws.services.sqs.AmazonSQSClient
 import com.amazonaws.services.sqs.model.{ReceiveMessageRequest,GetQueueUrlRequest}
 
-case class Join(username: String)
-case class StatusUpdate (id: Int)
-case class TranscodeStatusUpdate (id: Int)
-case class StatusUpdateAll ()
-case class Connected(enumerator: Enumerator[JsValue])
-case class CannotConnect(msg: String)
-
-case class BeginUpload (f: File, id: Int)
-case class FinishedUpload (id: Int)
-
-case class AWSEvent ()
-case class WaitForAWSEvent ()
-
-case class BeingTranscodeVideo (id: Int)
-case class FinishedTranscodeVideo (id: Int)
-
+// Amazon Elastic Transcoding message structure
 case class AwsElasticTranscodeMsg (
     state: String,
     jobId: String,
@@ -51,6 +35,7 @@ case class AwsElasticTranscodeMsg (
     errorCode: Option[String],
     messageDetails: Option[String])
 
+// Amazon Simple Queuing Service (SQS) message structure
 case class AswSqsMsg (
     Type: String,
     MessageId: String,
@@ -65,10 +50,31 @@ case class AswSqsMsg (
     }
 }
 
+/*
+ * AwsSQSEventSource Actor
+ * 
+ * This actor monitors the SQS for transcoding completion messages. It uses a rather 
+ * crude polling approach that would be better handled with a direct event message 
+ * from the Elastic Transcoder (ET) processing pipe. This should be easy to do,
+ * but would require this app to provide a publicly accessible URL for the Amazon
+ * service to send to. That would have added more complexity to the simple purpose
+ * of this exercise - so I cheated and had the ET pipe notificates sent to an 
+ * Amazon Simple Notification Service (SNS) Topic, created an Amazon Simple 
+ * Queuing Service (SQS) subscribed to that Topic, and wait/poll for message to arrive
+ * on the SQS in the Actor below. 
+ */
+
+case class WaitForAWSEvent ()
+
 class AwsSQSEventSource extends Actor {
     println("AwsSQSEventSource")
+    
+    // Amazon SQS service handle
     val sqs = new AmazonSQSClient(new ClasspathPropertiesFileCredentialsProvider())
-    val getQueueUrlRequest = new GetQueueUrlRequest("lyynks-transcoding-progress-queue")
+    
+    // Construct the query message
+    // TODO - the queue name is hard coded
+    val getQueueUrlRequest = new GetQueueUrlRequest("kevin-transcoding-progress-queue")
     val queueUrl = sqs.getQueueUrl(getQueueUrlRequest).getQueueUrl
     val receiveMessageRequest = new ReceiveMessageRequest(queueUrl)
     receiveMessageRequest.setWaitTimeSeconds(10)
@@ -76,26 +82,30 @@ class AwsSQSEventSource extends Actor {
     implicit val aswMsg = Json.reads[AswSqsMsg]
 
     def receive = {
-        case AWSEvent => {
-
-        }
-
         case WaitForAWSEvent => {
             println("WaitForAWSEvent")
-            val r2 = sqs.receiveMessage(receiveMessageRequest)
-            for (msg <- r2.getMessages) {
+            
+            // Wait for a message to arrive. We might get a message, or we might time out.
+            val r = sqs.receiveMessage(receiveMessageRequest)
+            
+            // Process any received messages
+            for (msg <- r.getMessages) {
                 val msgBody = msg.getBody
                 val jsval = Json.parse(msgBody)
 
                 jsval.asOpt[AswSqsMsg] match {
+                    // We received a message, send it to AwsTranscodeManager
                     case Some(m) => AwsTranscodeManager.myActor ! m
+                    
+                    // Error trap
                     case _ =>  {
                         println("Problem unpacking SQS message")
                         println(msgBody)
                     }
                 }
-
             }
+            
+            // Do this again (forever)
             self ! WaitForAWSEvent
         }
     }
@@ -103,21 +113,37 @@ class AwsSQSEventSource extends Actor {
 
 object AwsSQSEventSource {
     println("object AwsSQSEventSource")
+    
     val myActor = Akka.system.actorOf(Props[AwsSQSEventSource])
 }
 
+/*
+ * AwsUploadStatusManager Actor
+ * 
+ * This actor is responsible for sending status update event message back
+ * to the client.
+ */
+
+case class Join(username: String)
+case class StatusUpdate (id: Int)
+case class TranscodeStatusUpdate (id: Int)
+case class StatusUpdateAll ()
+
 class AwsUploadStatusManager extends Actor {
     println("AwsUploadStatusManager")
+    
     lazy val database = Database.forDataSource(DB.getDataSource())
     var statusUpdateMember = Map.empty[String, Concurrent.Channel[JsValue]]
 
     def receive = {
+        // Register a new client
         case Join(userId) => {
             val (chatEnumerator, chatChannel) = Concurrent.broadcast[JsValue]
             statusUpdateMember = statusUpdateMember + (userId -> chatChannel)
             sender ! Connected(chatEnumerator)
         }
-
+        
+        // Send the client a file upload status update message
         case StatusUpdate(id) => {
             database withSession {
                 val q1 = Query(FileUploadProgressT).filter(_.id === id)
@@ -136,6 +162,7 @@ class AwsUploadStatusManager extends Actor {
             }
         }
 
+        // Send the client a transcode status update message
         case TranscodeStatusUpdate(id) => {
             database withSession {
                 val q1 = Query(TranscodeProgressT).filter(_.id === id)
@@ -153,23 +180,30 @@ class AwsUploadStatusManager extends Actor {
             }
         }
 
+        // Doesn't do anything useful right now
         case StatusUpdateAll => {
             println("StatusUpdateAll")
         }
     }
 }
+
+case class Connected(enumerator: Enumerator[JsValue])
+
 object AwsUploadStatusManager {
     println("object AwsUploadStatusManager")
+    
     val myActor = Akka.system.actorOf(Props[AwsUploadStatusManager])
     implicit val timeout = Timeout(1 second)
 
+    // Doesn't do anything useful right now, just pings itself every 10 seconds
     Akka.system.scheduler.schedule(
         30 seconds,
         10 seconds,
         myActor,
         StatusUpdateAll
     )
-
+    
+    // Register a new client. Returns a WebSocket connection
     def registerForStatusUpdates (username: String) : Future[(Iteratee[JsValue,_],Enumerator[JsValue])] = {
         val x = myActor ? Join(username)
         x.map {
@@ -184,6 +218,15 @@ object AwsUploadStatusManager {
         }
     }
 }
+
+/*
+ * AwsUploadManager Actor
+ * 
+ * This actor is responsible for the Amazon file upload.
+ */
+
+case class BeginUpload (f: File, id: Int)
+case class FinishedUpload (id: Int)
 
 class AwsUploadManager extends Actor {
     lazy val database = Database.forDataSource(DB.getDataSource())
@@ -241,8 +284,18 @@ object AwsUploadManager {
     val myActor = Akka.system.actorOf(Props[AwsUploadManager].withRouter(RoundRobinRouter(nrOfInstances = 4)))
 }
 
+/*
+ * AwsTranscodeManager Actor
+ * 
+ * This actor is responsible for the Amazon Elastic Transcoding process.
+ */
+
+case class BeingTranscodeVideo (id: Int)
+case class FinishedTranscodeVideo (id: Int)
+
 class AwsTranscodeManager extends Actor {
     println("AwsTranscodeManager")
+    
     lazy val database = Database.forDataSource(DB.getDataSource())
 
     def receive = {
@@ -250,7 +303,11 @@ class AwsTranscodeManager extends Actor {
             println("AwsMsg = %s".format(m))
             val m4 = m.getMessage
             println("AwsElasticTranscodeMsg = %s".format(m4))
-
+            
+            /*
+             * TODO - correlate complete message with the appropriate
+             * TranscodeProgress table entry.
+             */
         }
 
         case BeingTranscodeVideo(id) => {
@@ -260,27 +317,35 @@ class AwsTranscodeManager extends Actor {
                 val q1 = Query(FileUploadProgressT).filter(_.id === id)
                 q1.map(r => r.status ~ r.updateTS).update("transcoding assets", currentTimestamp)
                 val uProg = q1.first
-
+                
+                // Create a TranscodeProgressT record for this task
                 val currentTS = currentTimestamp
                 val presetId = "1351620000000-000040"
                 val oKey =  "trans/%s/%s-{id}".format(uProg.userId,uProg.filename)
                 val transcodeProg = TranscodeProgress(None, uProg.userId, uProg.bucket, oKey, presetId, uProg.contentType, currentTS, currentTS, "transcode pending", None)
                 val id2 = TranscodeProgressT.* returning TranscodeProgressT.id insert transcodeProg
+                
+                // Send a status update to the client
                 AwsUploadStatusManager.myActor ! TranscodeStatusUpdate(id2)
 
-                val job1 = Aws.submitVideoTranscodeRequest(
+                // Submit the transcoding job
+                val job = Aws.submitVideoTranscodeRequest(
                     iKey = uProg.key.get,
                     oKey = oKey.replaceAll("""\{id\}""",id2.toString),
                     thumbPatt = "trans/%s/%s-%s-{resolution}-{count}".format(uProg.userId,uProg.filename,id2),
                     presetId = presetId)
-
+                
+                // Update the TranscodeProgressT record
                 val q2 = Query(TranscodeProgressT).filter(_.id === id2)
-                q2.map(r => r.status ~ r.updateTS ~ r.jobId).update("submitted", currentTimestamp, job1.getId)
+                q2.map(r => r.status ~ r.updateTS ~ r.jobId).update("submitted", currentTimestamp, job.getId)
+                
+                // Send a status update to the client
+                AwsUploadStatusManager.myActor ! TranscodeStatusUpdate(id2)
             }
         }
 
         case FinishedTranscodeVideo(id) => {
-
+            // TODO - send a transcoding status update to the client
         }
 
     }
@@ -288,6 +353,7 @@ class AwsTranscodeManager extends Actor {
 
 object AwsTranscodeManager {
     println("object AwsTranscodeManager")
+    
     val myActor = Akka.system.actorOf(Props[AwsTranscodeManager])
 
     AwsSQSEventSource.myActor ! WaitForAWSEvent

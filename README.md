@@ -29,3 +29,8 @@ As a prototype, there are hard coded resources defined in the code, for example 
 bucket and queue names to name just a few. Also, the H2 database restarts each time you run the play
 application.
 
+## Future
+Here's a partial list of things I might tackle in the future
+* Parameterize the hard coded Amazon settings
+* Expand the transcoding to create multiple flavors of the original
+* Show the video thumbnail on the client page 

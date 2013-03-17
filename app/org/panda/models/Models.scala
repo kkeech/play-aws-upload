@@ -2,8 +2,6 @@ package org.panda.models
 
 import scala.slick.driver.H2Driver.simple._
 
-case class ChatSession (id: Option[Int], name: String)
-
 case class FileUploadProgress (
     id: Option[Int],
     userId: String,
@@ -35,13 +33,6 @@ case class TranscodeProgress (
     )
 {
 
-}
-
-object ChatSessionT extends Table[ChatSession]("chat_session") {
-    def id = column[Int]("id", O.PrimaryKey, O.AutoInc)
-    def name = column[String]("name")
-
-    def * = id.? ~ name <> (ChatSession, ChatSession.unapply _)
 }
 
 object FileUploadProgressT extends Table[FileUploadProgress]("file_upload_process") {
