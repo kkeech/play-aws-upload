@@ -28,7 +28,7 @@ import com.amazonaws.services.sqs.model.{ReceiveMessageRequest,GetQueueUrlReques
 object Aws {
     // Amazon S3 service handle
     private val s3: AmazonS3 = new AmazonS3Client(new ClasspathPropertiesFileCredentialsProvider())
-    
+
     // Amazon Elastic Transcoder service handle
     private val eT : AmazonElasticTranscoder  = new AmazonElasticTranscoderClient(new ClasspathPropertiesFileCredentialsProvider())
 
@@ -40,7 +40,7 @@ object Aws {
         val m = new ObjectMetadata()
         m.setContentType(contentType)
         r.setMetadata(m)
-        
+
         try {
             s3.createBucket(bucketName)
             // Copy the file to S3
@@ -50,7 +50,7 @@ object Aws {
             case sExc: AmazonServiceException => println(sExc.toString())
         }
     }
-    
+
     // Copy the file in the background. Returns immediately.
     def copyFileWithProgress (bucketName: String, key: String, f: File, contentType: String) {
         // Construct the request
@@ -59,9 +59,9 @@ object Aws {
         val m = new ObjectMetadata()
         m.setContentType(contentType)
         r.setMetadata(m)
-        
+
         val tx = new TransferManager(new ClasspathPropertiesFileCredentialsProvider().getCredentials());
-        
+
         // Begin the async upload of the file to S3
         val upload = tx.upload(r)
 
