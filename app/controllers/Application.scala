@@ -6,6 +6,7 @@ package controllers
 
 import java.io.File
 
+
 import play.api._
 import play.api.mvc._
 import play.api.data._
@@ -27,7 +28,7 @@ import org.panda.{AwsUploadManager,AwsUploadStatusManager,BeginUpload}
 object Application extends Controller {
     // Get a lazy handle to the data base
     lazy val database = Database.forDataSource(DB.getDataSource())
-    
+
     // Crude unique user ID generator
     private var idSeq = 0
     def uniqueUserId = {idSeq += 1; "user"+idSeq.toString}
@@ -35,7 +36,7 @@ object Application extends Controller {
     /*
      * Home page handler
      */
-    
+
     def index = Action { implicit request =>
         play.api.Logger.info("index")
         Ok(views.html.upload(uniqueUserId))
@@ -44,7 +45,7 @@ object Application extends Controller {
     /*
      * File upload handler
      */
-    
+
     // File upload POST form
     case class FileUpload (
         description: String,
@@ -61,7 +62,7 @@ object Application extends Controller {
 
     def uploadToServer = Action(parse.multipartFormData) { implicit request =>
         play.api.Logger.info("uploadToServer")
-        
+
         // Parse the form
         val formOpt : Option[FileUpload] = fileUploadForm.bindFromRequest().fold(
             errFrm => None,
@@ -76,7 +77,7 @@ object Application extends Controller {
                 // TODO - parameterize the bucket name. For now, just hard code it.
                 val bucket = "mybucket.kevin01"
                 val key = filename
-                
+
                 database withSession {
                     // Create a place holder record to track the status of file upload progress
                     val currentTS = currentTimestamp
@@ -106,7 +107,7 @@ object Application extends Controller {
                     // Tell the AWS uploader to begin uploading
                     AwsUploadManager.myActor ! BeginUpload(f,id)
                 }
-                
+
                 // Construct the JSON response message
                 val rtn = Json.obj(
                     "okay" -> true,
@@ -123,7 +124,7 @@ object Application extends Controller {
             BadRequest("File not attached.")
         }
     }
-    
+
     /*
      * Status update registration handler
      */
