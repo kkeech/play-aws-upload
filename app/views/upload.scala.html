@@ -26,27 +26,26 @@ div.upload-page div.file-drop p {
     color: #FFF;
     font-weight:bold;
 }
-div.upload-page div.upload-status table {
+div.upload-page div.status table {
     font-size: 0.8em;
     width: 100%;
 }
-div.upload-page div.upload-status table tr:nth-child(odd) {background-color: #fdfeff;}
-div.upload-page div.upload-status table tr:nth-child(even) {background-color: #fdeee8;}
-div.upload-pageX div.upload-status table tbody {text-transform: capitalize;}
-div.upload-page div.upload-status table td,
-div.upload-page div.upload-status table th {
+div.upload-page div.status table tr:nth-child(odd) {background-color: #fdfeff;}
+div.upload-page div.status table tr:nth-child(even) {background-color: #fdeee8;}
+div.upload-page div.status table td,
+div.upload-page div.status table th {
     padding: 0px;
     margin: 0;
     text-align: left;
 }
 
-div.upload-page div.upload-status table td {
+div.upload-page div.status table td {
     padding-left: 1em;
      padding-top: 1em;
      padding-bottom: 1em;
      border: 1px solid #E2E2E2;
 }
-div.upload-page div.upload-status table th {
+div.upload-page div.status table th {
     text-transform: uppercase;
     background: #F4F6F8;
     font-weight: normal;
@@ -74,9 +73,13 @@ function page_init (self) {
     self.$all_file_drops = $("div[drop-box]", self.$container);
     self.$file_drop = $("div[drop-box='1']", self.$container);
 
-    self.$status_container = $('div.upload-status',$pg);
-    self.$status_table = $('table',self.$status_container);
-    self.$status_table_tbody = $('tbody',self.$status_table);
+    self.$upload_status_container = $('div.upload-status',$pg);
+    self.$upload_status_table = $('table',self.$upload_status_container);
+    self.$upload_status_table_tbody = $('tbody',self.$upload_status_table);
+
+    self.$transcode_status_container = $('div.transcode-status',$pg);
+    self.$transcode_status_table = $('table',self.$transcode_status_container);
+    self.$transcode_status_table_tbody = $('tbody',self.$transcode_status_table);
 
     self.$upload_progress = $('#upload-progress');
     self.$progress_bar = $('div.progress-bar', self.$upload_progress);
@@ -195,7 +198,60 @@ function page_init (self) {
         return defer.promise();
     }
 
-    var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
+    self.update_upload_status_table = function (msg) {
+        var createDate = new Date(msg.createTS);
+        var updateDate = new Date(msg.updateTS);
+        var timeDur = (msg.updateTS-msg.createTS);
+        var str = [
+            '<tr statusId="',msg.id,'"">',
+            '<td>',msg.id,'</td>',
+            '<td>',msg.userId,'</td>',
+            '<td>',msg.filename,'</td>',
+            '<td>',msg.contentType,'</td>',
+            '<td>',createDate.toUTCString(),'</td>',
+            '<td>',updateDate.toUTCString(),'</td>',
+            '<td>',timeDur,'</td>',
+            '<td>',msg.status,'</td>',
+            '</tr>'
+        ];
+        var html = str.join("");
+
+        var r = self.$upload_status_table_tbody.find("tr[statusId='"+msg.id+"']");
+        if (r.length > 0) {
+            r.replaceWith(html);
+        } else {
+            self.$upload_status_table_tbody.append(html);
+        }
+    }
+
+    self.update_transcode_status_table = function (msg) {
+        var createDate = new Date(msg.createTS);
+        var updateDate = new Date(msg.updateTS);
+        var timeDur = (msg.updateTS-msg.createTS);
+        var str = [
+            '<tr statusId="',msg.id,'"">',
+            '<td>',msg.id,'</td>',
+            '<td>',msg.userId,'</td>',
+            '<td>',msg.bucket,'</td>',
+            '<td>',msg.key,'</td>',
+            '<td>',msg.contentType,'</td>',
+            '<td>',createDate.toUTCString(),'</td>',
+            '<td>',updateDate.toUTCString(),'</td>',
+            '<td>',timeDur,'</td>',
+            '<td>',msg.status,'</td>',
+            '</tr>'
+        ];
+        var html = str.join("");
+
+        var r = self.$transcode_status_table_tbody.find("tr[statusId='"+msg.id+"']");
+        if (r.length > 0) {
+            r.replaceWith(html);
+        } else {
+            self.$transcode_status_table_tbody.append(html);
+        }
+    }
+
+    var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket;
 
     self.statusUpdate = function () {
         self.statusWebSocket = new WS("@routes.Application.registerForStatusUpdates(userId).webSocketURL()")
@@ -204,37 +260,20 @@ function page_init (self) {
         self.statusWebSocket.onerror = function (e) {console.log("statusWebSocket onerror"); console.log(e);}
         self.statusWebSocket.onmessage = function (e) {console.log("statusWebSocket onmessage"); console.log(e);}
 
-        self.update_status_table = function (msg) {
-            var createDate = new Date(msg.createTS);
-            var updateDate = new Date(msg.updateTS);
-            var timeDur = (msg.updateTS-msg.createTS);
-            var str = [
-                '<tr statusId="',msg.id,'"">',
-                '<td>',msg.id,'</td>',
-                '<td>',msg.userId,'</td>',
-                '<td>',msg.filename,'</td>',
-                '<td>',msg.contentType,'</td>',
-                '<td>',createDate.toUTCString(),'</td>',
-                '<td>',updateDate.toUTCString(),'</td>',
-                '<td>',timeDur,'</td>',
-                '<td>',msg.status,'</td>',
-                '</tr>'
-            ];
-            var html = str.join("");
-
-            var r = self.$status_table_tbody.find("tr[statusId='"+msg.id+"']");
-            if (r.length > 0) {
-                r.replaceWith(html);
-            } else {
-                self.$status_table_tbody.append(html);
-            }
-        }
-
         self.statusWebSocket.onmessage = function (e) {
             console.log("statusWebSocket onmessage");
             console.log(e);
             var data = $.parseJSON(e.data);
-            self.update_status_table(data);
+            switch (data.msgType) {
+                case "upload_status":
+                    self.update_upload_status_table(data);
+                    break;
+                case "transcode_status":
+                    self.update_transcode_status_table(data);
+                    break;
+                default:
+                    console.log("message type not handled = "+data.msgType);
+            }
         }
     }
 
@@ -249,10 +288,18 @@ function page_init (self) {
     <div class='upload-assets'>
         <div class='file-drop' drop-box="1"><div><p>Drop files here to upload</p><p>Copy entire file to server, then copy to S3</p></div></div>
     </div>
-    <div class='upload-status'>
+    <div class='upload-status status'>
         <div>
             <table>
             <thead><tr><th>Id</th><th>UserId</th><th>File Name</th><th>Content Type</th><th>Created</th><th>Last Update</th><th>Duration</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <div class='transcode-status status'>
+        <div>
+            <table>
+            <thead><tr><th>Id</th><th>UserId</th><th>Bucket</th><th>Key</th><th>Content Type</th><th>Created</th><th>Last Update</th><th>Duration</th><th>Status</th></tr></thead>
             <tbody></tbody>
             </table>
         </div>
